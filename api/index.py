@@ -11,8 +11,6 @@ client = MongoClient(MONGODB_URI)
 db = client["sample_mflix"]
 movies_collection = db["movies"]
 
-app.config["MONGO_URI"] = "mongodb://localhost:27017/sample_mflix"
-
  
 # Fetch movies based on search or category
 @app.route('/api/movies', methods=['GET'])
