@@ -7,7 +7,7 @@ import Image from "next/image";
 const Movies = ({ category = "trending", title = "Movies Collection" }) => {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // Track error state
+  const [error, setError] = useState(null); 
 
   useEffect(() => {
     axios
@@ -41,11 +41,10 @@ const Movies = ({ category = "trending", title = "Movies Collection" }) => {
             <div key={movie._id} className="p-4 bg-white rounded-lg shadow hover:shadow-xl transition-shadow duration-300">
               <h4 className="text-lg font-semibold mb-2">{movie.title || "Untitled"}</h4>
 
-              {/* Movie Poster using Next.js Image */}
               <div className="relative w-full h-72 mb-2">
                 {movie.poster ? (
                   <Image
-                  src={movie.poster || "/vercel.svg"} // Use Next.js Image component
+                  src={movie.poster || "/vercel.svg"} 
                   alt={movie.title}
                     layout="fill"
                     objectFit="cover"

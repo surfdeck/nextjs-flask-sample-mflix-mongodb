@@ -1,15 +1,18 @@
+// components/header/page.js
 "use client";
+
 function Header() {
   return (
-    <header className="bg-gradient-to-r from-black/50 to-indigo-400 text-white py-8 shadow-md">
-      <div className="container mx-auto text-center">
-      <div classNameæ="text-black p-6">
-        <h1 className="text-xl md:text-6xl font-bold tracking-tight mb-6">
-        movies
-            </h1>
-             </div>
+    <header className="bg-gray-900 text-white shadow-lg">  
+      <div className="container mx-auto px-4 py-4 flex items-center justify-between">  
+        <div className="flex items-center">
+           
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">  
+            Movie Explorer 
+          </h1>
         </div>
-            
+
+      </div>
     </header>
   );
 }

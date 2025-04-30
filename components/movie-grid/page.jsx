@@ -1,148 +1,293 @@
 "use client";
-import { useState, useEffect } from "react";
-import { motion } from "motion/react";
-import Image from "next/image"; // Import the Image component
 
-export default function MovieGrid({ movies }) {
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import Image from "next/image";
+import MovieCard from '@/components/movie-card/page'; 
+
+const NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5328';
+
+export default function MovieGrid({
+    movies, 
+    onDelete, 
+    isSavedList, 
+    user, 
+    userSavedMovieIds, 
+    onToggleSavedStatus, 
+    isSavingUnsettingCardId 
+}) {
+  
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [isModalOpen, setModalOpen] = useState(false);
-  const [selectedGenre, setSelectedGenre] = useState("All");
-  const [comments, setComments] = useState([]); // State to hold comments
+  const [comments, setComments] = useState([]);
+  const [commentError, setCommentError] = useState(null);
+  const [newCommentText, setNewCommentText] = useState("");
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const fetchCommentsForMovie = useCallback(async (movieId) => {
+       if (!movieId) return;
 
-  // Extract unique genres from movies
-  const genres = ["All", ...new Set(movies.flatMap(movie => movie.genres || []))];
+       setCommentError(null);
+       try {
+         const res = await fetch(`${NEXT_PUBLIC_API_URL}/api/comments?movieId=${movieId}`);
+         if (!res.ok) {
+           const errorText = await res.text();
+           throw new Error(`Failed to fetch comments: ${res.status} ${res.statusText} - ${errorText}`);
+         }
+         const data = await res.json();
+         setComments(data.comments || []);
+       } catch (err) {
+         console.error("Fetching comments error:", err);
+         setCommentError("Failed to load comments.");
+       }
+  }, [NEXT_PUBLIC_API_URL]);
 
-  // Filter movies by selected genre
-  const filteredMovies = movies.filter(movie => 
-    selectedGenre === "All" || movie.genres?.includes(selectedGenre)
-  );
+  const openModal = useCallback((movie) => {
+    if (!movie || !movie._id) {
+      return;
+    }
 
-  // Function to open the movie modal and fetch comments
-  const openModal = async (movie) => {
     setSelectedMovie(movie);
     setModalOpen(true);
-    
-    // Check if movie._id exists
-    console.log('Selected movie _id:', movie._id);  // Log the _id to ensure it's correct
+    setNewCommentText("");
+
+  }, []); 
   
-    // Fetch the comments associated with the selected movie
-    try {
-      const response = await fetch(`/api/comments?movieId=${movie._id}`);
-      const data = await response.json();
-      setComments(data.comments || []); // Set the comments to the state
-    } catch (error) {
-      console.error("Error fetching comments:", error);
-    }
-  };
-
-
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setModalOpen(false);
-    setComments([]); // Reset comments when closing modal
+    setSelectedMovie(null);
+    setComments([]);
+    setCommentError(null);
+    setNewCommentText("");
+    setIsSubmittingComment(false);
+  }, []);
+
+  useEffect(() => {
+    if (selectedMovie) {
+      fetchCommentsForMovie(selectedMovie._id);
+    }
+  }, [selectedMovie, fetchCommentsForMovie]);
+
+  useEffect(() => {
+      if (isModalOpen && selectedMovie && !movies?.find(m => m._id === selectedMovie._id)) {
+           closeModal();
+      } else if (!movies?.length && isModalOpen) {
+           closeModal();
+      }
+  }, [movies, isModalOpen, selectedMovie, closeModal]);
+
+  const handleAddComment = useCallback(async () => {
+    if (!newCommentText.trim() || !selectedMovie?._id) {
+      return;
+    }
+    if (!user) {
+          
+         return;
+    }
+
+    setIsSubmittingComment(true);
+    try {
+        const response = await fetch(`${NEXT_PUBLIC_API_URL}/api/comments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ movie_id: selectedMovie._id, text: newCommentText.trim() }),
+          credentials: 'include', 
+        });
+
+        if (!response.ok) {
+             const errorBody = await response.json().catch(() => ({}));
+             return;
+        }
+
+        const data = await response.json();
+
+        setNewCommentText("");
+        fetchCommentsForMovie(selectedMovie._id); 
+
+    } catch (error) {
+    } finally {
+        setIsSubmittingComment(false);
+    }
+  }, [newCommentText, selectedMovie, user, fetchCommentsForMovie, NEXT_PUBLIC_API_URL]);
+ 
+const handleDeleteMovie = async (movieId) => {
+  try {
+    setLoadingMovieId(movieId); 
+    const response = await fetch(`/api/movies/${movieId}`, {
+      method: 'DELETE',
+    });
+
+    if (response.ok) {
+      
+      setSavedMovies((prev) => prev.filter((m) => m._id !== movieId));
+    } else {
+      console.error("Failed to delete movie:", await response.text());
+    }
+  } catch (error) {
+    console.error("Error deleting movie:", error);
+  } finally {
+    setLoadingMovieId(null); 
+  }
+};
+
+  const handleSelect = () => {
+    console.log("Modal action button clicked for:", selectedMovie?.title);
+    closeModal();
   };
 
   return (
-    <div className="p-6">
-      {/* Genre Filter Dropdown */}
-      <div className="mb-4">
-        <label className="block text-gray-700 font-semibold mb-2">Filter by Genre:</label>
-        <select
-          className="p-2 border rounded-lg"
-          value={selectedGenre}
-          onChange={(e) => setSelectedGenre(e.target.value)}
-        >
-          {genres.map((genre) => (
-            <option key={genre} value={genre}>
-              {genre}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Movie Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredMovies.map((movie, index) => (
-          <motion.div
-            key={movie._id || index}  // Use index if _id is missing
-            className="p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition transform hover:-translate-y-1 hover:scale-105 cursor-pointer"
-            whileHover={{ scale: 1.05 }}
-            onClick={() => openModal(movie)}
-          >
-            <Image
-              src={movie.poster || "/vercel.svg"} // Use Next.js Image component
-              alt={movie.title}
-              width={300} // Set the width
-              height={200} // Set the height
-              className="w-full h-48 object-cover rounded-lg"
-            />
-            <h3 className="text-lg font-bold mt-2">{movie.title}</h3>
-            <p className="text-gray-500">{movie.year} • {movie.runtime} min</p>
-            <p className="text-indigo-600">{movie.genres?.join(", ")}</p>
-            <p className="text-gray-600">Cast: {movie.cast?.slice(0, 3).join(", ") || "N/A"}</p>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Movie Modal */}
-      {isModalOpen && selectedMovie && (
-        <motion.div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={closeModal}
-        >
-          <motion.div
-            className="bg-white rounded-lg p-6 max-w-full sm:max-w-lg w-full shadow-lg relative"
-            initial={{ scale: 0.8 }}
-            animate={{ scale: 1 }}
-            exit={{ scale: 0.8 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button onClick={closeModal} className="absolute top-4 right-4 text-xl -my-2 -mx-2 text-gray-500 hover:text-red-900">
-              &times;
-            </button>
-            <Image
-              src={selectedMovie.poster || "/vercel.png"} // Use Next.js Image component
-              alt={selectedMovie.title}
-              width={500} // Set the width
-              height={300} // Set the height
-              className="w-full h-60 object-cover rounded-lg"
-            />
-            <h2 className="text-2xl font-bold mt-4">{selectedMovie.title}</h2>
-            <p className="text-gray-600">{selectedMovie.year} • {selectedMovie.runtime} min</p>
-            <p className="text-gray-600">{selectedMovie.genres?.join(", ")}</p>
-            <p className="mt-2">{selectedMovie.fullplot || "No detailed plot available."}</p>
-
-            {selectedMovie.directors && (
-              <p className="text-gray-700 mt-2">
-                <strong>Director(s):</strong> {selectedMovie.directors.join(", ")}
-              </p>
-            )}
-
-            {selectedMovie.writers && (
-              <p className="text-gray-700 mt-2">
-                <strong>Writer(s):</strong> {selectedMovie.writers.join(", ")}
-              </p>
-            )}
-
-            {selectedMovie.awards && selectedMovie.awards.text && (
-              <p className="text-green-700 mt-2"><strong>Awards:</strong> {selectedMovie.awards.text}</p>
-            )}
-
-            {selectedMovie.imdb && (
-              <p className="text-yellow-600 mt-2">
-                <strong>IMDb Rating:</strong> {selectedMovie.imdb.rating || "N/A"} ({selectedMovie.imdb.votes || 0} votes)
-              </p>
-            )}
-
-            <p className="text-gray-500 mt-2">
-              <strong>Release Date:</strong> {new Date(selectedMovie.released).toLocaleDateString() || "N/A"}
-            </p>
-
-          </motion.div>
-        </motion.div>
+    <div>
+      {movies && movies.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+            {movies.map((movie) => (
+              <MovieCard
+                  key={movie._id}
+                  movie={movie}
+                  onClick={openModal} 
+                  onDelete={onDelete} 
+                  isSavedList={isSavedList} 
+                  user={user} 
+                  userSavedMovieIds={userSavedMovieIds} 
+                  onToggleSavedStatus={onToggleSavedStatus} 
+                  isSavingUnsettingCardId={isSavingUnsettingCardId} 
+              />
+            ))}
+          </div>
+      ) : (
+         <div className="text-white text-center text-lg">No movies available based on current filters.</div>
       )}
+      <AnimatePresence>
+        {isModalOpen && selectedMovie && (
+          <motion.div
+            className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-lg flex items-center justify-center z-50 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeModal}
+          >
+            <motion.div
+              className="relative bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-3xl w-full text-white overflow-y-auto max-h-[90vh]"
+              initial={{ scale: 0.9, y: 50 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 50 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+              layoutId={selectedMovie._id}
+            >
+
+              <button
+                onClick={closeModal}
+                className="absolute top-4 right-4 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-full w-10 h-10 flex items-center justify-center text-2xl font-semibold shadow-md transition-colors"
+                aria-label="Close modal"
+              >
+                ×
+              </button>
+
+
+              <div className="flex flex-col md:flex-row gap-6">
+                {selectedMovie.poster ? (
+                  <Image
+                    src={selectedMovie.poster}
+                    alt={selectedMovie.title}
+                    width={300}
+                    height={450}
+                    className="rounded-lg object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-full md:w-64 h-64 md:h-auto bg-gray-700 flex items-center justify-center text-gray-400 rounded-lg flex-shrink-0">
+                    No Poster Available
+                  </div>
+                )}
+
+                <div className="flex-grow">
+                  <h2 className="text-4xl font-bold mb-2 text-white">{selectedMovie.title}</h2>
+                  <p className="text-gray-400 text-sm mb-4">
+                    {selectedMovie.year} • {selectedMovie.runtime} min • {selectedMovie.genres?.join(", ")}
+                  </p>
+
+                  {selectedMovie.imdb?.rating && (
+                    <div className="flex items-center mb-4">
+                      <span className="text-yellow-500 font-bold text-lg mr-2">IMDb: {selectedMovie.imdb.rating}</span>
+                      {selectedMovie.imdb?.votes && (
+                        <span className="text-gray-400 text-sm">({selectedMovie.imdb.votes} votes)</span>
+                      )}
+                    </div>
+                  )}
+
+                  <p className="text-gray-300 mb-4">{selectedMovie.fullplot || selectedMovie.plot || "No plot available."}</p>
+
+                  {selectedMovie.directors?.length > 0 && (
+                    <p className="text-gray-400 text-sm mb-2">
+                      <strong>Director{selectedMovie.directors.length > 1 ? 's' : ''}:</strong> {selectedMovie.directors.join(", ")}
+                    </p>
+                  )}
+                  {selectedMovie.writers?.length > 0 && (
+                    <p className="text-gray-400 text-sm mb-2">
+                      <strong>Writer{selectedMovie.writers.length > 1 ? 's' : ''}:</strong> {selectedMovie.writers.join(", ")}
+                    </p>
+                  )}
+                  {selectedMovie.cast?.length > 0 && (
+                    <p className="text-gray-400 text-sm mb-2">
+                      <strong>Cast:</strong> {selectedMovie.cast.join(", ")}
+                    </p>
+                  )}
+                  {selectedMovie.awards?.text && (
+                    <p className="text-green-400 text-sm mt-2"><strong>Awards:</strong> {selectedMovie.awards.text}</p>
+                  )}
+                  {selectedMovie.released && (
+                    <p className="text-gray-500 text-sm mt-2">
+                      <strong>Release Date:</strong> {new Date(selectedMovie.released).toLocaleDateString() || "N/A"}
+                    </p>
+                  )}
+
+                  <div className="mt-6 pt-6 border-t border-gray-700">
+                    <h3 className="text-xl font-bold mb-4">Comments</h3>
+
+                    {user ? (
+                         <div className="mb-6">
+                             <textarea
+                                 className="w-full p-3 rounded-md border border-gray-700 bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                                 rows="3"
+                                 placeholder="Add a comment..."
+                                 value={newCommentText}
+                                 onChange={(e) => setNewCommentText(e.target.value)}
+                                 disabled={isSubmittingComment}
+                             ></textarea>
+                             <button
+                                 onClick={handleAddComment}
+                                 className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                 disabled={!newCommentText.trim() || isSubmittingComment}
+                             >
+                                 {isSubmittingComment ? 'Posting...' : 'Post Comment'}
+                             </button>
+                         </div>
+                    ) : (
+                         <p className="text-gray-400 text-sm mb-6">Login to add a comment.</p>
+                    )}
+
+                    {commentError ? (
+                      <div className="text-red-500 text-sm">{commentError}</div>
+                    ) : comments.length > 0 ? (
+                      <ul>
+                        {comments.map(comment => (
+                          <li key={comment._id} className="mb-4 pb-4 border-b border-gray-800 last:border-b-0">
+                            <p className="text-gray-300 italic">"{comment.text}"</p>
+                            <p className="text-gray-500 text-sm mt-2">
+                               - {comment.name}
+                               {comment.date && ` on ${new Date(comment.date).toLocaleDateString()}`}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-gray-400 text-sm">No comments yet.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div> 
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
