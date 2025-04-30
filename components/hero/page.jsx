@@ -1,22 +1,16 @@
 "use client";
 import Image from 'next/image'; 
 import { useState, useEffect, useCallback } from 'react'; 
-import { motion, AnimatePresence } from "framer-motion"; 
-import { useRouter } from 'next/navigation'; 
+import { motion, AnimatePresence } from "motion/react"; 
 const NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5328';
 const SLIDE_INTERVAL = 7000; 
 
 const Hero = () => {
-  const router = useRouter(); 
-
   
   const [featuredMovies, setFeaturedMovies] = useState([]);
-  
   const [currentMovieIndex, setCurrentMovieIndex] = useState(0);
-  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   
   useEffect(() => {
     const fetchFeaturedMovies = async () => {

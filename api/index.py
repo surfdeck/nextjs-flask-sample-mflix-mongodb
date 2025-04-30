@@ -31,17 +31,12 @@ if not app.config['SECRET_KEY']:
      app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
 
 if not app.config['SECRET_KEY']:
-    
-    print("Error: Missing SECRET_KEY or FLASK_SECRET_KEY in .env file") 
+
     raise ValueError("Missing SECRET_KEY or FLASK_SECRET_KEY in .env file. Set this in your backend .env file.")
-
-
 
 app.config['SESSION_COOKIE_SAMESITE'] = 'None' 
 app.config['SESSION_COOKIE_SECURE'] = True     
 app.config['SESSION_COOKIE_HTTPONLY'] = True   
-
-
 
 MONGODB_URI = os.getenv("MONGODB_URI") 
 if not MONGODB_URI:
@@ -71,8 +66,6 @@ else:
              users_db = None
              users_collection = None
 
-
-
     except ConnectionFailure as e:
         
         client = None 
@@ -82,8 +75,6 @@ else:
         movies_collection = None
         comments_collection = None
         users_collection = None
-        theaters_collection = None
-        sessions_collection = None
          
     except Exception as e:
         
@@ -98,19 +89,9 @@ else:
         theaters_collection = None
         sessions_collection = None
 
-
-
-
-
 if 'movies_collection' not in locals(): movies_collection = None
 if 'comments_collection' not in locals(): comments_collection = None
 if 'users_collection' not in locals(): users_collection = None
-if 'theaters_collection' not in locals(): theaters_collection = None
-if 'sessions_collection' not in locals(): sessions_collection = None
-
-
-
-
 
 if app.config['SECRET_KEY'] and users_collection is not None:
     login_manager = LoginManager()
@@ -530,6 +511,39 @@ def get_movie_by_id_route(movie_id):
 
 
  
+
+@app.route('/api/movies/featured', methods=['GET'])
+def get_featured_movies_route():
+    
+    if movies_collection is None:
+        current_app.logger.error("movies_collection is None in get_featured_movies_route. Check MongoDB connection.")
+        return jsonify({"error": "Database connection failed or movies collection not available"}), 500
+
+    logger = current_app.logger
+    try:
+        
+        
+        
+        
+        featured_query = {"imdb.rating": {"$exists": True, "$ne": None, "$type": "number"}}
+        featured_movies_cursor = movies_collection.find(featured_query).sort("imdb.rating", -1).limit(10)
+
+        
+        featured_movies = [serialize_doc(movie) for movie in featured_movies_cursor]
+
+        logger.info(f"API /api/movies/featured executed. Query: {featured_query}. Found {len(featured_movies)} featured movies.")
+
+        
+        
+        return jsonify({"movies": featured_movies}), 200 
+
+    except OperationFailure as e:
+        
+        logger.error(f"MongoDB Operation Failed in get_featured_movies_route: {e}")
+        return jsonify({"error": "Database operation failed"}), 500 
+    except Exception as e:
+        logger.error(f"An unexpected error occurred in get_featured_movies_route: {e}", exc_info=True) 
+        return jsonify({"error": str(e)}), 500 
 
  
 @app.route('/api/users/me/movies', methods=['GET'])
